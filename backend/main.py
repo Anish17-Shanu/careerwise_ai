@@ -8,6 +8,9 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey
 import PyPDF2
 import google.generativeai as genai
 from dotenv import load_dotenv
+from fastapi.staticfiles import StaticFiles
+
+
 
 # --- Configuration ---
 load_dotenv()
@@ -27,7 +30,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+app.mount("/", StaticFiles(directory="static", html=True), name="frontend")
 # --- Database ---
 Base = declarative_base()
 
