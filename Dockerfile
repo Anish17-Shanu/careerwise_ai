@@ -2,13 +2,11 @@
 FROM node:20-alpine AS frontend-build
 WORKDIR /app
 
-# Copy only package.json and package-lock.json first
+# Copy package.json and install dependencies
 COPY careerwise-frontend/package*.json ./
-
-# Install dependencies in /app
 RUN npm install
 
-# Copy full frontend code
+# Copy frontend source code
 COPY careerwise-frontend/ ./
 
 # Build React app
@@ -25,10 +23,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY backend/ ./
 
-# Copy React build from frontend stage
-COPY --from=frontend-build /app/build ./backend/static
+# Copy React build from frontend stage to /app/static
+COPY --from=frontend-build /app/build ./static
 
-# Expose port Render uses
+# Expose port Render expects
 ENV PORT 10000
 EXPOSE 10000
 

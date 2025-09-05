@@ -8,10 +8,12 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey
 import PyPDF2
 import google.generativeai as genai
 from dotenv import load_dotenv
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 import os
 
-static_path = os.path.join(os.path.dirname(__file__), "static")
+
+static_path = os.path.join(os.getcwd(), "static")
 
 
 
@@ -26,6 +28,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI()
+app.mount("/", StaticFiles(directory=static_path, html=True), name="frontend")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,7 +36,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/", StaticFiles(directory=static_path, html=True), name="frontend")
+
 # --- Database ---
 Base = declarative_base()
 
