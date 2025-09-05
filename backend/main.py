@@ -140,7 +140,7 @@ def get_ai_recommendation(resume_text: str, preferences: dict = None):
         raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {e}")
 
 # --- API Endpoint ---
-@app.post("/upload_resume/")
+@app.post("/api/upload_resume/")
 async def upload_resume(
     name: str = Form(...),
     email: str = Form(...),
@@ -208,6 +208,6 @@ async def upload_resume(
         "custom_matching": ai_result.get("custom_matching")
     }
 
-@app.get("/")
+@app.get("/api/ping")
 def root():
     return {"message": "CareerWise.AI Backend running 🚀"}
