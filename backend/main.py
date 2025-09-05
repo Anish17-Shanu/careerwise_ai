@@ -9,6 +9,9 @@ import PyPDF2
 import google.generativeai as genai
 from dotenv import load_dotenv
 from fastapi.staticfiles import StaticFiles
+import os
+
+static_path = os.path.join(os.path.dirname(__file__), "static")
 
 
 
@@ -30,7 +33,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/", StaticFiles(directory="static", html=True), name="frontend")
+app.mount("/", StaticFiles(directory=static_path, html=True), name="frontend")
 # --- Database ---
 Base = declarative_base()
 
