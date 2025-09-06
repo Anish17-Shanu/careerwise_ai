@@ -84,10 +84,10 @@ def get_ai_recommendation(resume_text: str, preferences: dict = None):
     Call Google Gemini AI to get career recommendations.
     Ensures all numeric fields are 0–100 and missing lists are empty.
     """
+    career_suggestion_list = preferences.get("career_interest") or "all relevant careers"
     prompt = f"""
     Analyze this resume and return strictly valid JSON only.
-    Include 5–8 relevant career paths: Software Engineer, Data Scientist,
-    Machine Learning Engineer, Full Stack Developer, AI Engineer, DevOps Engineer, Data Analyst.
+    Include 5–8 relevant careers: {career_suggestion_list}.
 
     For each career path, include:
     - readiness_breakdown:
