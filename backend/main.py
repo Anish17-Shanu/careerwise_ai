@@ -9,6 +9,8 @@ import PyPDF2
 import pdfplumber
 import google.generativeai as genai
 from dotenv import load_dotenv
+from pathlib import Path
+
 
 # --- Load environment variables ---
 load_dotenv()
@@ -202,6 +204,11 @@ async def upload_resume(
         except OSError:
             pass
 
-# frontend_build_path = os.path.join(os.path.dirname(__file__), "careerwise-frontend", "build")
-# app.mount("/", StaticFiles(directory=frontend_build_path, html=True), name="frontend")
+# --- Serve React frontend if available ---
+frontend_build_path = Path(__file__).parent.parent / "frontend" / "build"
 
+if frontend_build_path.exists():
+    app.mount("/", StaticFiles(directory=str(frontend_build_path), html=True), name="frontend")
+    print(f"Serving frontend from {frontend_build_path}")
+else:
+    print(f"Frontend build folder not found at {frontend_build_path}. Only API will work.")
