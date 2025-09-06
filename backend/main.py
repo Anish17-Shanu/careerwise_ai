@@ -202,3 +202,6 @@ async def upload_resume(
         except OSError:
             pass
 
+frontend_build_path = os.path.join(os.path.dirname(__file__), "careerwise-frontend", "build")
+app.mount("/", StaticFiles(directory=frontend_build_path, html=True), name="frontend")
+

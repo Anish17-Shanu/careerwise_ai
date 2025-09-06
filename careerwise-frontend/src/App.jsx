@@ -43,13 +43,11 @@ export default function App() {
     try {
       const backendUrl = getBackendUrl();
 
-      const res = await axios.post(
-        `${backendUrl}/api/upload_resume/`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
+      const res = await axios.post(`/api/upload_resume/`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+
 
       const backendData = res.data;
       const breakdown = backendData.readiness_breakdown || {};
