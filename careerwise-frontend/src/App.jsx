@@ -4,6 +4,16 @@ import Dashboard from "./components/Dashboard";
 import ReadinessFeedback from "./components/ReadinessFeedback";
 import ScoreBreakdown from "./components/ScoreBreakdown";
 
+// Helper to get backend URL dynamically
+const getBackendUrl = () => {
+  // Running locally
+  if (window.location.hostname === "localhost") {
+    return process.env.REACT_APP_BACKEND_URL || "http://localhost:10000";
+  }
+  // In Docker, use Docker service name
+  return "http://careerwise_backend:10000";
+};
+
 export default function App() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -31,14 +41,17 @@ export default function App() {
     formData.append("preferences", preferences);
 
     try {
-      const res = await axios.post("/api/upload_resume/", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const backendUrl = getBackendUrl();
 
-      // Transform backend JSON for frontend components
+      const res = await axios.post(
+        `${backendUrl}/api/upload_resume/`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+
       const backendData = res.data;
-
-      // Ensure readiness breakdown is formatted for ScoreBreakdown
       const breakdown = backendData.readiness_breakdown || {};
       const recommendations = backendData.recommendations || [];
 
@@ -64,13 +77,8 @@ export default function App() {
   if (data)
     return (
       <div className="space-y-12 mb-12">
-        {/* Overall readiness summary */}
         <ReadinessFeedback data={data} />
-
-        {/* Score breakdown per career */}
         <ScoreBreakdown breakdown={data.breakdown} />
-
-        {/* Detailed career recommendations */}
         <Dashboard data={data} />
       </div>
     );

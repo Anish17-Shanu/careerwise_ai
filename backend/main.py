@@ -17,8 +17,9 @@ if not API_KEY:
     raise ValueError("GOOGLE_API_KEY not set.")
 genai.configure(api_key=API_KEY)
 
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = "/tmp/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 # --- FastAPI app ---
 app = FastAPI()
@@ -53,7 +54,7 @@ def extract_text(file_path: str):
             reader = PyPDF2.PdfReader(file_path)
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
             if not text.strip():
-                raise ValueError("Empty PDF text, fallback to pdfplumber")
+                raise ValueError("Empty PDF, fallback to pdfplumber")
         except Exception:
             text = ""
             with pdfplumber.open(file_path) as pdf:
@@ -66,7 +67,6 @@ def extract_text(file_path: str):
         raise HTTPException(status_code=400, detail="Unsupported file format")
 
 def parse_ai_json(ai_output: str):
-    """Robustly extract JSON from AI response."""
     import re
     try:
         json_strs = re.findall(r"\{.*\}", ai_output, re.DOTALL)
@@ -74,7 +74,8 @@ def parse_ai_json(ai_output: str):
             raise ValueError("No JSON found in AI output")
         return json.loads(json_strs[0])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI response parsing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"AI JSON parsing failed: {e}")
+
 
 def get_ai_recommendation(resume_text: str, preferences: dict = None):
     """
@@ -201,9 +202,3 @@ async def upload_resume(
         except OSError:
             pass
 
-# --- Serve React frontend ---
-frontend_build_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "careerwise-frontend", "build")
-if os.path.exists(frontend_build_path):
-    app.mount("/", StaticFiles(directory=frontend_build_path, html=True), name="frontend")
-else:
-    print(f"Frontend build folder not found at {frontend_build_path}")
