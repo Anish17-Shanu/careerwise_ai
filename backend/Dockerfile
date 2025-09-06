@@ -1,16 +1,19 @@
+# backend/Dockerfile
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies for PDF processing
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+# Install Python dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./ ./ 
+# Copy source
+COPY ./ ./
 
 EXPOSE 10000
 
