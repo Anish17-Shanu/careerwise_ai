@@ -1,8 +1,8 @@
 fastapi
-uvicorn
-sqlalchemy
+uvicorn[standard]
 python-dotenv
 PyPDF2
+pdfplumber
 google-generativeai
-spacy
 python-multipart
+shutil

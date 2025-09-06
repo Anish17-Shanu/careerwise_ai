@@ -1,34 +1,29 @@
 import os
 import shutil
 import json
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+import uuid
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session, sessionmaker, relationship, declarative_base
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey
+from fastapi.staticfiles import StaticFiles
 import PyPDF2
+import pdfplumber
 import google.generativeai as genai
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-import os
 
-
-static_path = os.path.join(os.getcwd(), "static")
-
-
-
-# --- Configuration ---
+# --- Load environment variables ---
 load_dotenv()
 API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
-    raise ValueError("GOOGLE_API_KEY environment variable not set.")
+    raise ValueError("GOOGLE_API_KEY not set.")
 genai.configure(api_key=API_KEY)
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# --- FastAPI app ---
 app = FastAPI()
-app.mount("/", StaticFiles(directory=static_path, html=True), name="frontend")
+
+# --- CORS ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,177 +32,178 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Database ---
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    email = Column(String, unique=True, index=True)
-    resume_text = Column(Text)
-    recommendations = relationship("Recommendation", back_populates="user")
-
-class Recommendation(Base):
-    __tablename__ = "recommendations"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    career_path = Column(String)
-    score = Column(Integer)
-    user = relationship("User", back_populates="recommendations")
-
-engine = create_engine("sqlite:///./sql_app.db", connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base.metadata.create_all(bind=engine)
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 # --- Helpers ---
-def save_file(file: UploadFile):
-    file_location = os.path.join(UPLOAD_DIR, file.filename)
-    try:
-        with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        return file_location
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+async def save_file(file: UploadFile):
+    ext = os.path.splitext(file.filename)[1]
+    filename = f"{uuid.uuid4()}{ext}"
+    path = os.path.join(UPLOAD_DIR, filename)
 
-def extract_text_from_file(file_path: str):
-    try:
-        if file_path.lower().endswith(".txt"):
-            with open(file_path, "r", encoding="utf-8") as f:
-                return f.read()
-        elif file_path.lower().endswith(".pdf"):
+    with open(path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return path
+
+def extract_text(file_path: str):
+    ext = file_path.lower().split('.')[-1]
+    if ext == "txt":
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read()
+    elif ext == "pdf":
+        try:
             reader = PyPDF2.PdfReader(file_path)
-            return "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported file format. Please upload .txt or .pdf.")
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            if not text.strip():
+                raise ValueError("Empty PDF text, fallback to pdfplumber")
+        except Exception:
+            text = ""
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages:
+                    text += page.extract_text() or ""
+            if not text.strip():
+                raise HTTPException(status_code=400, detail="Unable to extract text from PDF")
+        return text
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file format")
+
+def parse_ai_json(ai_output: str):
+    """Robustly extract JSON from AI response."""
+    import re
+    try:
+        json_strs = re.findall(r"\{.*\}", ai_output, re.DOTALL)
+        if not json_strs:
+            raise ValueError("No JSON found in AI output")
+        return json.loads(json_strs[0])
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to extract text from file: {e}")
+        raise HTTPException(status_code=500, detail=f"AI response parsing failed: {e}")
 
 def get_ai_recommendation(resume_text: str, preferences: dict = None):
     """
-    Generates detailed career insights including:
-    - Skills gap analysis
-    - Weighted scoring for career readiness
-    - Industry trends
-    - Resume suggestions & ATS score
-    - Personalized learning paths
+    Call Google Gemini AI to get career recommendations.
+    Ensures all numeric fields are 0–100 and missing lists are empty.
     """
     prompt = f"""
-    Analyze the following resume and generate a JSON object with:
+    Analyze this resume and return strictly valid JSON only.
+    Include 5–8 relevant career paths: Software Engineer, Data Scientist,
+    Machine Learning Engineer, Full Stack Developer, AI Engineer, DevOps Engineer, Data Analyst.
 
-    - "career_paths": array of top career paths
-    - "readiness_score": overall readiness score 0-100
-    - "readiness_breakdown": per career, include:
-        - "Skills": {{"points": int, "advice": str}}
-        - "Education": {{"points": int, "advice": str}}
-        - "Experience": {{"points": int, "advice": str}}
-        - "Weighted_score": weighted average of Skills, Education, Experience
-        - "Skills_gap": list of skills missing or weak
-    - "industry_trends": top trending roles or skills in the industry
-    - "custom_matching": list of careers matched to user preferences (remote, salary, location)
-    - "resume_suggestions": AI-generated bullet points to improve resume
-    - "ATS_score": integer 0-100
-    - "missing_keywords": list of keywords missing for target roles
-    - "feedback": general constructive feedback
-    - "recommended_skills": list of skills per career
-    - "recommended_courses": list of courses per career
-    - "recommended_projects": list of projects per career
+    For each career path, include:
+    - readiness_breakdown:
+        - Skills: points (0-100), advice (string)
+        - Education: points (0-100), advice (string)
+        - Experience: points (0-100), advice (string)
+        - Weighted_score (0-100)
+        - Skills_gap (list, empty if none)
+    - recommended_skills (list)
+    - recommended_courses (list)
+    - recommended_projects (list)
+    - feedback (string)
+    - ATS_score (0-100)
+    - missing_keywords (list)
+    - resume_suggestions (list)
+    - industry_trends (list)
+    - custom_matching (list)
 
-    User preferences (if any): {preferences}
+    Numeric fields must be numbers 0–100.
+    Lists must be empty if no data.
+    User preferences: {preferences or {}}
 
-    Resume:
+    Return JSON in the following structure:
+
+    {{
+        "readiness_score": 0-100,
+        "feedback": "...",
+        "career_paths": ["Software Engineer", ...],
+        "readiness_breakdown": {{
+            "Software Engineer": {{
+                "Skills": {{"points": 0, "advice": ""}},
+                "Education": {{"points": 0, "advice": ""}},
+                "Experience": {{"points": 0, "advice": ""}},
+                "Weighted_score": 0,
+                "Skills_gap": []
+            }},
+            ...
+        }},
+        "recommended_skills": {{"Software Engineer": [], ...}},
+        "recommended_courses": {{"Software Engineer": [], ...}},
+        "recommended_projects": {{"Software Engineer": [], ...}},
+        "industry_trends": [],
+        "resume_suggestions": [],
+        "ATS_score": 0,
+        "missing_keywords": [],
+        "custom_matching": []
+    }}
+
+    Resume text:
     {resume_text}
     """
-
     model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
-    ai_output = response.text.strip()
+    return response.text.strip()
 
-    try:
-        json_start = ai_output.find("{")
-        json_end = ai_output.rfind("}") + 1
-        json_str = ai_output[json_start:json_end]
-        ai_data = json.loads(json_str)
-        return ai_data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {e}")
 
-# --- API Endpoint ---
+# --- API Routes ---
+@app.get("/api/ping")
+def ping():
+    return {"message": "CareerWise.AI Backend running 🚀"}
+
 @app.post("/api/upload_resume/")
 async def upload_resume(
     name: str = Form(...),
     email: str = Form(...),
     file: UploadFile = File(...),
-    preferences: str = Form("{}"),
-    db: Session = Depends(get_db)
+    preferences: str = Form("{}")
 ):
-    file_path = save_file(file)
-    resume_text = extract_text_from_file(file_path)
-    user_prefs = json.loads(preferences)
-    ai_result = get_ai_recommendation(resume_text, user_prefs)
-
-    career_paths = ai_result.get("career_paths", [])
-    breakdown = ai_result.get("readiness_breakdown", {})
-    overall_score = ai_result.get("readiness_score", 0)
-
-    # Store/update user
-    db_user = db.query(User).filter(User.email == email).first()
-    if db_user:
-        db_user.name = name
-        db_user.resume_text = resume_text
-        db.query(Recommendation).filter(Recommendation.user_id == db_user.id).delete()
-        db.commit()
-        db.refresh(db_user)
-    else:
-        db_user = User(name=name, email=email, resume_text=resume_text)
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-
-    # Save AI recommendations
-    for career in career_paths:
-        weighted_score = breakdown.get(career, {}).get("Weighted_score", 0)
-        db_rec = Recommendation(user_id=db_user.id, career_path=career, score=weighted_score)
-        db.add(db_rec)
-    db.commit()
+    file_path = await save_file(file)
 
     try:
-        os.remove(file_path)
-    except OSError:
-        pass
+        resume_text = extract_text(file_path)
+        user_prefs = json.loads(preferences or "{}")
+        ai_output = get_ai_recommendation(resume_text, user_prefs)
+        ai_data = parse_ai_json(ai_output)
 
-    return {
-        "name": name,
-        "email": email,
-        "resume_file": file.filename,
-        "readiness_score": overall_score,
-        "readiness_feedback": ai_result.get("feedback"),
-        "recommendations": [
-            {
+        # --- Transform AI JSON to frontend-ready format ---
+        recommendations = []
+        readiness_breakdown = {}
+
+        for career in ai_data.get("career_paths", []):
+            breakdown = ai_data.get("readiness_breakdown", {}).get(career, {})
+            rec = {
                 "career_path": career,
-                "score": breakdown.get(career, {}).get("Weighted_score"),
-                "details": breakdown.get(career),
-                "recommended_skills": ai_result.get("recommended_skills", {}).get(career),
-                "recommended_courses": ai_result.get("recommended_courses", {}).get(career),
-                "recommended_projects": ai_result.get("recommended_projects", {}).get(career),
+                "score": breakdown.get("Weighted_score", 0),
+                "details": breakdown,
+                "recommended_skills": ai_data.get("recommended_skills", {}).get(career, []),
+                "recommended_courses": ai_data.get("recommended_courses", {}).get(career, []),
+                "recommended_projects": ai_data.get("recommended_projects", {}).get(career, []),
             }
-            for career in career_paths
-        ],
-        "skills_gap": {career: breakdown.get(career, {}).get("Skills_gap") for career in career_paths},
-        "industry_trends": ai_result.get("industry_trends"),
-        "resume_suggestions": ai_result.get("resume_suggestions"),
-        "ATS_score": ai_result.get("ATS_score"),
-        "missing_keywords": ai_result.get("missing_keywords"),
-        "custom_matching": ai_result.get("custom_matching")
-    }
+            recommendations.append(rec)
+            readiness_breakdown[career] = breakdown
 
-@app.get("/api/ping")
-def root():
-    return {"message": "CareerWise.AI Backend running 🚀"}
+        response = {
+            "name": name,
+            "email": email,
+            "resume_file": file.filename,
+            "readiness_score": ai_data.get("readiness_score", 0),
+            "readiness_feedback": ai_data.get("feedback", ""),
+            "recommendations": recommendations,
+            "readiness_breakdown": readiness_breakdown,
+            "industry_trends": ai_data.get("industry_trends", []),
+            "resume_suggestions": ai_data.get("resume_suggestions", []),
+            "ATS_score": ai_data.get("ATS_score", 0),
+            "missing_keywords": ai_data.get("missing_keywords", []),
+            "custom_matching": ai_data.get("custom_matching", []),
+        }
+
+        return response
+
+    finally:
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+
+# --- Serve React frontend ---
+frontend_build_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "careerwise-frontend", "build")
+if os.path.exists(frontend_build_path):
+    app.mount("/", StaticFiles(directory=frontend_build_path, html=True), name="frontend")
+else:
+    print(f"Frontend build folder not found at {frontend_build_path}")

@@ -1,8 +1,6 @@
-// App.jsx
-import { useState } from "react";
+import React, { useState } from "react";
 import axios from "axios";
-import { AiOutlineUpload } from "react-icons/ai";
-import CareerRecommendations from "./components/CareerRecommendations";
+import Dashboard from "./components/Dashboard";
 import ReadinessFeedback from "./components/ReadinessFeedback";
 import ScoreBreakdown from "./components/ScoreBreakdown";
 
@@ -10,54 +8,88 @@ export default function App() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [file, setFile] = useState(null);
-  const [result, setResult] = useState(null);
+  const [preferences, setPreferences] = useState("{}");
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setResult(null);
+    if (!file) {
+      setError("Please upload a resume file (.pdf or .txt).");
+      return;
+    }
 
-    if (!file) return setError("Please upload a resume.");
+    setLoading(true);
+    setError("");
+    setData(null);
 
     const formData = new FormData();
     formData.append("name", name);
     formData.append("email", email);
     formData.append("file", file);
+    formData.append("preferences", preferences);
 
     try {
-      setLoading(true);
-      const res = await axios.post(
-        "http://127.0.0.1:8000/upload_resume/",
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
-      setResult(res.data);
+      const res = await axios.post("/api/upload_resume/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      // Transform backend JSON for frontend components
+      const backendData = res.data;
+
+      // Ensure readiness breakdown is formatted for ScoreBreakdown
+      const breakdown = backendData.readiness_breakdown || {};
+      const recommendations = backendData.recommendations || [];
+
+      setData({
+        ...backendData,
+        breakdown,
+        recommendations,
+      });
     } catch (err) {
-      setError(err.response?.data?.detail || "Something went wrong. Try again.");
+      setError(err.response?.data?.detail || "Failed to get recommendations.");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-r from-indigo-100 via-purple-100 to-pink-100 flex flex-col items-center p-6">
-      <h1 className="text-4xl font-bold mb-8 text-purple-700 animate-fade-in">
-        CareerWise.AI
-      </h1>
+  if (loading)
+    return (
+      <p className="text-center mt-20 text-xl">
+        Processing resume, please wait...
+      </p>
+    );
 
-      {/* Upload Form */}
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-8 rounded-xl shadow-lg w-full max-w-lg space-y-6 animate-fade-in"
-      >
+  if (data)
+    return (
+      <div className="space-y-12 mb-12">
+        {/* Overall readiness summary */}
+        <ReadinessFeedback data={data} />
+
+        {/* Score breakdown per career */}
+        <ScoreBreakdown breakdown={data.breakdown} />
+
+        {/* Detailed career recommendations */}
+        <Dashboard data={data} />
+      </div>
+    );
+
+  return (
+    <div className="max-w-xl mx-auto mt-16 p-6 bg-white rounded-xl shadow-lg">
+      <h1 className="text-3xl font-bold mb-6 text-center">CareerWise.AI</h1>
+
+      {error && (
+        <p className="text-red-600 text-center mb-4 font-semibold">{error}</p>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="text"
           placeholder="Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+          className="w-full p-3 border rounded-lg"
           required
         />
         <input
@@ -65,41 +97,30 @@ export default function App() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+          className="w-full p-3 border rounded-lg"
           required
         />
-        <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-purple-50">
-          <AiOutlineUpload className="text-2xl mr-2" />
-          {file ? file.name : "Upload Resume (.pdf or .txt)"}
-          <input
-            type="file"
-            className="hidden"
-            onChange={(e) => setFile(e.target.files[0])}
-            accept=".pdf,.txt"
-          />
-        </label>
-
-        {error && <p className="text-red-600">{error}</p>}
-
+        <input
+          type="file"
+          accept=".pdf,.txt"
+          onChange={(e) => setFile(e.target.files[0])}
+          className="w-full"
+          required
+        />
+        <textarea
+          placeholder='Preferences (JSON format, e.g. {"career_interest":["AI Engineer"]})'
+          value={preferences}
+          onChange={(e) => setPreferences(e.target.value)}
+          className="w-full p-3 border rounded-lg"
+          rows={3}
+        />
         <button
           type="submit"
-          className="w-full bg-purple-600 text-white p-3 rounded-lg font-semibold hover:bg-purple-700 transition"
+          className="w-full bg-purple-600 text-white py-3 font-semibold rounded-xl hover:bg-purple-700 transition-colors"
         >
-          {loading ? "Analyzing..." : "Get Recommendations"}
+          Get Recommendations
         </button>
       </form>
-
-      {/* Results */}
-      {result && (
-        <div className="w-full max-w-6xl mt-8 space-y-8">
-          <ReadinessFeedback data={result} />
-          <CareerRecommendations data={result} />
-          <ScoreBreakdown breakdown={result.recommendations?.reduce((acc, item) => {
-            acc[item.career_path] = item.details || {};
-            return acc;
-          }, {})} />
-        </div>
-      )}
     </div>
   );
 }

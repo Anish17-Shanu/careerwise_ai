@@ -1,82 +1,77 @@
-import React, { useState } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
-import { FaRegCopy } from "react-icons/fa";
-import { CopyToClipboard } from "react-copy-to-clipboard";
+import React from "react";
+import { FaBriefcase } from "react-icons/fa";
+import {
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  ResponsiveContainer,
+} from "recharts";
 
-const COLORS = ["#8b5cf6", "#f472b6"];
+export default function CareerCard({ career, isOpen, onToggle }) {
+  const { career_path, score, details, recommended_skills, recommended_courses, recommended_projects } = career;
 
-export default function CareerCard({ careerData, apiData }) {
-  const [open, setOpen] = useState(false);
-  const toggleOpen = () => setOpen(!open);
-
-  const career = careerData.career_path;
-  const score = careerData.score ?? 0;
-  const breakdown = careerData.details ?? {};
-
-  const chartData = [
-    { name: "Score", value: score },
-    { name: "Remaining", value: 100 - score },
-  ];
-
-  const renderList = (title, items) => (
-    <div className="space-y-1">
-      <strong>{title}:</strong>
-      {items?.length > 0 ? (
-        items.map((item, idx) => (
-          <div key={idx} className="flex justify-between items-center">
-            <span>{item}</span>
-            <CopyToClipboard text={item}>
-              <FaRegCopy className="cursor-pointer ml-2 text-gray-500 hover:text-purple-600" />
-            </CopyToClipboard>
-          </div>
-        ))
-      ) : (
-        <span>N/A</span>
-      )}
-    </div>
-  );
+  const radarData = ["Skills", "Education", "Experience"].map((key) => ({
+    metric: key,
+    score: details[key]?.points || 0,
+  }));
 
   return (
-    <div
-      className="relative bg-white rounded-xl shadow-lg p-6 hover:shadow-2xl transition cursor-pointer"
-      onClick={toggleOpen}
-    >
-      <div className="absolute top-3 right-3 bg-purple-600 text-white text-sm font-bold px-3 py-1 rounded-full shadow">
-        {score.toFixed(0)}%
+    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 rounded-2xl shadow-xl cursor-pointer transform hover:scale-105 transition">
+      <div className="flex justify-between items-center" onClick={onToggle}>
+        <div className="flex items-center space-x-4">
+          <FaBriefcase className="text-white text-3xl" />
+          <h3 className="text-xl font-semibold">{career_path}</h3>
+        </div>
+        <span className="text-lg font-bold">{score}%</span>
       </div>
 
-      <h3 className="text-xl font-bold text-purple-700 mb-4">{career}</h3>
-
-      <div className="w-full h-40">
-        <ResponsiveContainer>
-          <PieChart>
-            <Pie
-              data={chartData}
-              innerRadius={40}
-              outerRadius={60}
-              paddingAngle={5}
-              dataKey="value"
-            >
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-
-      {open && (
-        <div className="mt-4 bg-purple-50 text-gray-700 p-4 rounded-lg space-y-4">
-          <div>
-            <strong>Readiness Breakdown:</strong>
-            <p>Skills: {breakdown?.Skills?.points ?? 0} - {breakdown?.Skills?.advice ?? ""}</p>
-            <p>Education: {breakdown?.Education?.points ?? 0} - {breakdown?.Education?.advice ?? ""}</p>
-            <p>Experience: {breakdown?.Experience?.points ?? 0} - {breakdown?.Experience?.advice ?? ""}</p>
+      {isOpen && (
+        <div className="mt-4 bg-white text-gray-800 p-5 rounded-xl shadow-inner">
+          <div className="w-full h-64 mb-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                <PolarGrid />
+                <PolarAngleAxis dataKey="metric" />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                <Radar
+                  name={career_path}
+                  dataKey="score"
+                  stroke="#8884d8"
+                  fill="#8884d8"
+                  fillOpacity={0.6}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
           </div>
 
-          {renderList("Recommended Skills", apiData.recommended_skills?.[career] ?? [])}
-          {renderList("Courses", apiData.recommended_courses?.[career] ?? [])}
-          {renderList("Projects", apiData.recommended_projects?.[career] ?? [])}
+          {["Skills", "Education", "Experience"].map((key) => (
+            <div key={key} className="border-b border-gray-200 py-2">
+              <div className="flex justify-between">
+                <span className="font-semibold">{key}</span>
+                <span>{details[key]?.points || 0} points</span>
+              </div>
+              <p className="text-gray-600 text-sm mt-1">{details[key]?.advice || "No advice available"}</p>
+            </div>
+          ))}
+
+          <div className="mt-4">
+            <h4 className="font-semibold text-gray-800 mb-1">Recommended Skills:</h4>
+            <ul className="list-disc list-inside text-gray-700">
+              {recommended_skills.length > 0 ? recommended_skills.map((s, i) => <li key={i}>{s}</li>) : <li>No data available</li>}
+            </ul>
+
+            <h4 className="font-semibold text-gray-800 mt-2 mb-1">Recommended Courses:</h4>
+            <ul className="list-disc list-inside text-gray-700">
+              {recommended_courses.length > 0 ? recommended_courses.map((c, i) => <li key={i}>{c}</li>) : <li>No data available</li>}
+            </ul>
+
+            <h4 className="font-semibold text-gray-800 mt-2 mb-1">Recommended Projects:</h4>
+            <ul className="list-disc list-inside text-gray-700">
+              {recommended_projects.length > 0 ? recommended_projects.map((p, i) => <li key={i}>{p}</li>) : <li>No data available</li>}
+            </ul>
+          </div>
         </div>
       )}
     </div>
