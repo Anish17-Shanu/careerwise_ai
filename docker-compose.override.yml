@@ -16,7 +16,7 @@ services:
     ports:
       - "80:80"
     environment:
-      - REACT_APP_BACKEND_URL=https://careerwise-ai.onrender.com
+      - REACT_APP_BACKEND_URL=https://careerwise-ai.onrender.com/api
     depends_on:
       - backend
     restart: unless-stopped
