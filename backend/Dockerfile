@@ -1,5 +1,3 @@
-# backend/Dockerfile
-
 # Use official Python image
 FROM python:3.12-slim
 
@@ -12,11 +10,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python packages
-COPY requirements.txt .
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source code
-COPY ./ ./
+COPY ./ ./ 
 
 # Expose backend port
 EXPOSE 10000

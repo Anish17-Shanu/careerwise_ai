@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./backend
+    container_name: careerwise_backend
+    ports:
+      - "10000:10000"
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: careerwise_frontend
+    ports:
+      - "80:80"
+    environment:
+      - REACT_APP_BACKEND_URL=https://careerwise-ai.onrender.com
+    depends_on:
+      - backend
+    restart: unless-stopped
