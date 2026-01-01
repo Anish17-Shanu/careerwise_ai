@@ -10,7 +10,7 @@ import pdfplumber
 import google.generativeai as genai
 from dotenv import load_dotenv
 from pathlib import Path
-from fastapi.responses import FileResponse;
+
 
 # --- Load environment variables ---
 load_dotenv()
@@ -145,14 +145,6 @@ def get_ai_recommendation(resume_text: str, preferences: dict = None):
 
 
 # --- API Routes ---
-@app.get("/{full_path:path}")
-async def serve_react_app(full_path: str):
-    index_file = frontend_build_path / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    raise HTTPException(status_code=404, detail="Frontend not found")
-
-
 @app.get("/api/ping")
 def ping():
     return {"message": "CareerWise.AI Backend running 🚀"}
@@ -213,7 +205,7 @@ async def upload_resume(
             pass
 
 # --- Serve React frontend if available ---
-frontend_build_path = Path(__file__).parent.parent / "careerwise-frontend" / "build"
+frontend_build_path = Path(__file__).parent.parent / "frontend" / "build"
 
 if frontend_build_path.exists():
     app.mount("/", StaticFiles(directory=str(frontend_build_path), html=True), name="frontend")
