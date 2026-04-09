@@ -82,12 +82,13 @@ def parse_ai_json(ai_output: str):
 def get_ai_recommendation(resume_text: str, preferences: dict = None):
     """
     Call Google Gemini AI to get career recommendations.
-    Ensures all numeric fields are 0–100 and missing lists are empty.
+    Ensures all numeric fields are 0-100 and missing lists are empty.
     """
+    preferences = preferences or {}
     career_suggestion_list = preferences.get("career_interest") or "all relevant careers"
     prompt = f"""
     Analyze this resume and return strictly valid JSON only.
-    Include 5–8 relevant careers: {career_suggestion_list}.
+    Include 5-8 relevant careers: {career_suggestion_list}.
 
     For each career path, include:
     - readiness_breakdown:
@@ -106,7 +107,7 @@ def get_ai_recommendation(resume_text: str, preferences: dict = None):
     - industry_trends (list)
     - custom_matching (list)
 
-    Numeric fields must be numbers 0–100.
+    Numeric fields must be numbers 0-100.
     Lists must be empty if no data.
     User preferences: {preferences or {}}
 
@@ -147,7 +148,7 @@ def get_ai_recommendation(resume_text: str, preferences: dict = None):
 # --- API Routes ---
 @app.get("/api/ping")
 def ping():
-    return {"message": "CareerWise.AI Backend running 🚀"}
+    return {"message": "CareerWise.AI Backend running"}
 
 @app.post("/api/upload_resume/")
 async def upload_resume(
@@ -205,7 +206,7 @@ async def upload_resume(
             pass
 
 # --- Serve React frontend if available ---
-frontend_build_path = Path(__file__).parent.parent / "frontend" / "build"
+frontend_build_path = Path(__file__).parent.parent / "careerwise-frontend" / "build"
 
 if frontend_build_path.exists():
     app.mount("/", StaticFiles(directory=str(frontend_build_path), html=True), name="frontend")

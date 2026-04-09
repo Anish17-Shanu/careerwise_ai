@@ -11,12 +11,12 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build: ./careerwise-frontend
     container_name: careerwise_frontend
     ports:
       - "80:80"
     environment:
-      - REACT_APP_BACKEND_URL=https://careerwise-ai.onrender.com/api
+      - REACT_APP_BACKEND_URL=https://careerwise-ai.onrender.com
     depends_on:
       - backend
     restart: unless-stopped

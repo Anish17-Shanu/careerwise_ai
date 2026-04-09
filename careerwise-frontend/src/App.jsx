@@ -6,12 +6,14 @@ import ScoreBreakdown from "./components/ScoreBreakdown";
 
 // Helper to get backend URL dynamically
 const getBackendUrl = () => {
-  // Running locally
-  if (window.location.hostname === "localhost") {
-    return process.env.REACT_APP_BACKEND_URL || "http://localhost:10000";
+  const configuredUrl = process.env.REACT_APP_BACKEND_URL;
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/+$/, "");
   }
-  // In Docker, use Docker service name
-  return "http://careerwise_backend:10000";
+  if (window.location.hostname === "localhost") {
+    return "http://localhost:10000";
+  }
+  return `${window.location.protocol}//${window.location.hostname}:10000`;
 };
 
 export default function App() {
@@ -43,7 +45,7 @@ export default function App() {
     try {
       const backendUrl = getBackendUrl();
 
-      const res = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/upload_resume/`, formData, {
+      const res = await axios.post(`${backendUrl}/api/upload_resume/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       

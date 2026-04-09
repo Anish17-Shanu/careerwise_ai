@@ -1,1 +1,26 @@
+# Environment files
 .env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Local data and uploads
+*.db
+*.sqlite3
+backend/uploads/
+
+# Frontend
+careerwise-frontend/node_modules/
+careerwise-frontend/build/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
